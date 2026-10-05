@@ -1,4 +1,12 @@
-"""Linked EPUB indexes: structure, term translation and deterministic assembly."""
+"""Указатели EPUB со ссылками: разбор, перевод терминов, сборка.
+
+Указатель с номерами страниц в переводе бесполезен, а со ссылками — работает:
+ссылка ведёт на тот же абзац, в какой бы язык книга ни ушла. Такой указатель
+сохраняется. Его термины переводит отдельный проход — с глоссарием книги и
+готовым переводом мест, куда ведут ссылки. Порядок записей и буквенные
+заголовки строит код: алфавит перевода другой, и модели сортировку сотен
+строк доверять нельзя.
+"""
 import copy
 import json
 import os
@@ -10,7 +18,10 @@ from functools import lru_cache
 from . import lang
 from .tune import AGY_CAP, INDEX_BATCH, INDEX_CONTEXT_BLOCKS, INDEX_CONTEXT_CHARS, INDEX_LINK_SHARE
 
+# Версия разбора указателей. Рабочая папка, принятая более старым разбором,
+# при открытии дополняется записями из исходного EPUB — см. restore().
 VERSION = 1
+# Заголовок раздела-указателя и слова перекрёстной ссылки на языках оригинала.
 HEAD = re.compile(
     r"^(?:(?:name|subject|author|general|organization)\s+)?index\b"
     r"|^(?:предметный\s+|именной\s+)?указатель\b"
@@ -29,9 +40,10 @@ def _tag(el):
 
 
 def doc_roles(root):
-    """Element identities -> index roles, before containers lose their own text."""
+    """Роли элементов указателя по id(элемента) — пока разбор не разобрал списки на блоки."""
     nodes = list(root.iter())
     parents = {ch: el for el in nodes for ch in el}
+    # Раздел, размеченный как указатель самим EPUB: epub:type или role.
     semantic = {}
     for i, el in enumerate(nodes):
         kinds = (el.get("{http://www.idpf.org/2007/ops}type", "") + " "
@@ -48,6 +60,8 @@ def doc_roles(root):
             section, active, stack = "semantic_" + owner if owner is not None else "", False, []
         heading = tag in ("h1", "h2", "h3", "h4", "h5", "h6")
         named = tag in ("p", "div") and bool(HEAD.fullmatch(text))
+        # Без разметки указатель начинается с заголовка «Index» и длится до
+        # заголовка того же уровня; буквенные рубрики его не закрывают.
         if (heading or named) and HEAD.fullmatch(text):
             section, active, level, stack = str(i), True, int(tag[1]) if heading else 1, []
             roles[id(el)] = {"key": str(i), "section": section, "heading": True}
@@ -72,8 +86,10 @@ def doc_roles(root):
                 break
             p = parents.get(p)
         if tag == "p" and ancestor is not None:
-            continue                         # its owning li reads it once
+            continue                         # его прочтёт объемлющий li
         parent = roles[id(ancestor)]["key"] if ancestor is not None else ""
+        # Вёрстка абзацами вместо списков: уровень записи стоит в классе —
+        # index2, index-sub1, sub.
         if tag == "p":
             cls = el.get("class", "").lower()
             m = re.search(r"index[-_ ]?(?:sub)?([1-9])", cls)
@@ -86,7 +102,7 @@ def doc_roles(root):
 
 
 def own_element(el):
-    """A parent entry includes its label, but not the nested entries."""
+    """Запись без вложенных списков: у родителя остаётся только его собственный текст."""
     node = copy.deepcopy(el)
     for parent in node.iter():
         for ch in list(parent):
@@ -96,12 +112,18 @@ def own_element(el):
 
 
 def split_entry(text):
-    """Separate the sortable term from locators and see-references."""
+    """Запись делится на термин, по которому идёт сортировка, и хвост: номера и «см.»."""
     numeric = re.search(r"<a\d+>\s*[\dⅰ-ⅿivxlcdm]+(?:[–—-][\dⅰ-ⅿivxlcdm]+)?\s*</a\d+>", text, re.I)
-    # Plain page numbers also count, so mixed indexes have an honest denominator.
+    # Номер страницы без ссылки — тоже хвост: иначе в смешанном указателе
+    # доля записей со ссылками считалась бы от неверного числа.
     bare = re.search(r",\s+(?=\d+(?:\s*[,–—-]|\s*$))", text)
     see = SEE.search(plain(text))
-    see_markup = re.search(r"(?:<(?:i|b)>\s*)?(?:см\.(?:\s*также\b)?|(?:see(?:\s+also)?|siehe(?:\s+auch)?|voir(?:\s+aussi)?|véase(?:\s+también)?)\b)", text, re.I) if see else None
+    # То же «см.», но в размеченном тексте: хвост начинается с открывающего
+    # тега, а не со слова.
+    see_markup = re.search(
+        r"(?:<(?:i|b)>\s*)?(?:см\.(?:\s*также\b)?"
+        r"|(?:see(?:\s+also)?|siehe(?:\s+auch)?|voir(?:\s+aussi)?|véase(?:\s+también)?)\b)",
+        text, re.I) if see else None
     cuts = [m.start() for m in (numeric, bare, see_markup) if m]
     at = min(cuts) if cuts else len(text)
     term = text[:at].rstrip(" ,.;:")
@@ -110,7 +132,7 @@ def split_entry(text):
 
 
 def finish_roles(blocks):
-    """Convert document-local entry identities to persistent block IDs."""
+    """Ключи записей, действующие внутри документа, меняются на постоянные номера блоков."""
     ids = {b["index"]["key"]: b["id"] for b in blocks if b.get("index")}
     for b in blocks:
         info = b.get("index")
@@ -123,10 +145,15 @@ def finish_roles(blocks):
             info["term"], info["tail"] = split_entry(b["text"])
         else:
             info["term"] = b["text"]
-        b["asis"] = True                    # not prose; dedicated index pass
+        b["asis"] = True                    # не проза: переводит свой проход
 
 
 def selected(blocks, mode="auto"):
+    """Какие разделы-указатели сохранить.
+
+    `omit` не оставляет ничего. `auto` требует, чтобы рабочие ссылки были
+    хотя бы у доли INDEX_LINK_SHARE записей. Явным режимам хватает одной.
+    """
     ids = {b["id"] for b in blocks if not b.get("drop") or b.get("index")}
     sections = defaultdict(list)
     for b in blocks:
@@ -135,16 +162,22 @@ def selected(blocks, mode="auto"):
     keep = set()
     for sec, entries in sections.items():
         parent_ids = {b["index"].get("parent") for b in entries}
+        # Родитель без своих ссылок — только рубрика над подзаписями, в счёт
+        # не идёт.
         records = [b for b in entries if not b["index"].get("heading")
                    and not b["index"].get("divider")
                    and (b.get("links") or b["index"].get("tail") or b["id"] not in parent_ids)]
-        linked = sum(any(u.startswith("#") and u[1:] in ids for u in b.get("links", [])) for b in records)
-        if mode != "omit" and linked and (mode != "auto" or linked / max(1, len(records)) >= INDEX_LINK_SHARE):
+        linked = sum(any(u.startswith("#") and u[1:] in ids for u in b.get("links", []))
+                     for b in records)
+        if mode == "omit" or not linked:
+            continue
+        if mode != "auto" or linked / max(1, len(records)) >= INDEX_LINK_SHARE:
             keep.add(sec)
     return keep
 
 
 def mark(blocks, mode="auto"):
+    """Сохранённые указатели возвращаются в книгу, остальные выбрасываются."""
     keep = selected(blocks, mode)
     for b in blocks:
         if b.get("index"):
@@ -157,7 +190,12 @@ def mark(blocks, mode="auto"):
 
 
 def restore(path, work, blocks):
-    """Upgrade cached EPUB indexes without renumbering or rereading the prose."""
+    """Указатель для рабочей папки, принятой до появления этого модуля.
+
+    Исходный EPUB разбирается заново, но берутся из него только записи
+    указателя. Блоки прозы сохраняют номера: на них держится готовый перевод.
+    Записи получают номера вида `.x`, чтобы не совпасть с прежними `.b`.
+    """
     from . import extract as E
     styles = _load(os.path.join(work, "structure.json"))
     _, fresh, _, _ = E._epub(path, styles)
@@ -171,6 +209,9 @@ def restore(path, work, blocks):
         for a in b.get("anchors", []):
             anchors[a].add(b["id"])
         texts[(b["kind"], b["text"])].add(b["id"])
+    # Свежий номер блока -> номер в рабочей папке. Блок прозы опознаётся по
+    # тому же номеру с тем же текстом, иначе по якорю, иначе по тексту — и
+    # только когда совпадение единственное.
     remap = {}
     for b in fresh:
         if b.get("index"):
@@ -186,12 +227,22 @@ def restore(path, work, blocks):
     replacements = []
     for sec, entries in sections.items():
         name = plain(next((b["text"] for b in entries if b["index"].get("heading")), "Index"))
-        start = next((i for i, b in enumerate(blocks) if b["kind"] in ("title", "subtitle") and plain(b["text"]).casefold() == name.casefold()), None)
+        # Старый разбор оставил от указателя заголовок и абзацы до следующего
+        # заголовка; однобуквенные заголовки — его же буквенные рубрики.
+        start = next((i for i, b in enumerate(blocks)
+                      if b["kind"] in ("title", "subtitle")
+                      and plain(b["text"]).casefold() == name.casefold()), None)
         if start is not None:
-            end = next((i for i in range(start + 1, len(blocks)) if blocks[i]["kind"] == "title" and not re.fullmatch(r"\W*[^\W\d_]\W*", plain(blocks[i]["text"]))), len(blocks))
+            letter = re.compile(r"\W*[^\W\d_]\W*")
+            end = next((i for i in range(start + 1, len(blocks))
+                        if blocks[i]["kind"] == "title"
+                        and not letter.fullmatch(plain(blocks[i]["text"]))), len(blocks))
         else:
+            # Раздела в папке нет вовсе: записи встают за последним блоком
+            # прозы, который предшествовал им в книге.
             before = fresh[:fresh.index(entries[0])]
-            prev = next((remap[b["id"]] for b in reversed(before) if not b.get("index") and b["id"] in remap), None)
+            prev = next((remap[b["id"]] for b in reversed(before)
+                         if not b.get("index") and b["id"] in remap), None)
             start = next((i + 1 for i, b in enumerate(blocks) if b["id"] == prev), len(blocks))
             end = start
         new = copy.deepcopy(entries)
@@ -204,7 +255,8 @@ def restore(path, work, blocks):
             for u in b.get("links", []):
                 if u.startswith("#"):
                     if u[1:] not in remap:
-                        raise E.BadBook(f"Cannot restore index target {u}; the cached book has different source blocks")
+                        raise E.BadBook(f"Cannot restore index target {u}; "
+                                        "the cached book has different source blocks")
                     u = "#" + remap[u[1:]]
                 urls.append(u)
             if urls:
@@ -213,7 +265,7 @@ def restore(path, work, blocks):
     out = copy.deepcopy(blocks)
     for start, end, new in sorted(replacements, reverse=True, key=lambda x: x[0]):
         out[start:end] = new
-    # Prose references to an index entry must follow the restored entry as well.
+    # Ссылки из прозы на запись указателя переводятся на её новый номер.
     index_ids = {b["id"] for b in fresh if b.get("index")}
     source_by_id = {remap[b["id"]]: b for b in fresh if not b.get("index") and b["id"] in remap}
     for b in out:
@@ -273,7 +325,11 @@ def _stamp(term, known):
 
 
 def _contexts(work, blocks, to):
-    """Use final prose near link destinations, not a literal term-match test."""
+    """Контекст записи: родительский термин и готовый перевод места, куда ведёт ссылка.
+
+    Ссылка часто указывает на начало страницы, поэтому берётся несколько
+    абзацев от цели подряд, а не тот, где термин встретился буквально.
+    """
     from . import pipeline as P
     translated, _ = P.all_translations(work, to)
     for rule in _load(P.lpath(work, "fixups.json", to)).get("rules", []):
@@ -300,13 +356,14 @@ def _contexts(work, blocks, to):
                 if candidate.get("index") or candidate.get("drop"):
                     break
                 if candidate["id"] in translated and candidate["kind"] == "p":
-                    passages.append({"source": plain(candidate["text"])[:INDEX_CONTEXT_CHARS],
-                                     "translation": plain(translated[candidate["id"]])[:INDEX_CONTEXT_CHARS]})
+                    cut = lambda t: plain(t)[:INDEX_CONTEXT_CHARS]
+                    passages.append({"source": cut(candidate["text"]),
+                                     "translation": cut(translated[candidate["id"]])})
                 if len(passages) >= INDEX_CONTEXT_BLOCKS:
                     break
             if passages:
                 context["passages"] = passages
-                break                       # one useful destination per term
+                break                       # термину хватает одного места
         if context:
             contexts[b["id"]] = context
     return contexts
@@ -323,7 +380,7 @@ def _inputs(work, blocks, to):
 
 
 def _batches(todo, contexts, known, to, system):
-    """Count the complete UTF-8 payload, including system and envelope."""
+    """Пачки запросов. Размер считается по всей посылке в UTF-8: с системной частью и обёрткой."""
     from . import pipeline as P
     from .agent import Fatal
 
@@ -410,13 +467,17 @@ def sort_key(term, to):
     text = unicodedata.normalize("NFC", plain(term)).casefold().lstrip("\"'«»“”‘’([{ ")
     if to == "ru":
         text = text.replace("ё", "е")
-    # In a Russian index, untranslated Latin symbols follow Cyrillic entries.
+    # В русском указателе непереведённая латиница и знаки идут после кириллицы.
     group = int(bool(text) and not ("а" <= text[0] <= "я")) if to == "ru" else 0
     return group, _collator().sort_key(text)
 
 
 def _index_links(out, original):
-    """Old letter divisions have no translated equivalent; link to the index."""
+    """Ссылки на буквенные рубрики оригинала ведут на сам указатель.
+
+    У перевода свой алфавит и свои рубрики. Если указатель выброшен, ссылка
+    снимается, а её текст остаётся.
+    """
     available = {b["id"] for b in out if not b.get("drop")}
     removed = {b["id"]: b["index"]["section"] for b in original
                if b.get("index") and b["id"] not in available}
@@ -435,7 +496,12 @@ def _index_links(out, original):
 
 
 def assemble(work, blocks, meta, partial=False):
-    """Sorted blocks and translations; no model calls during build."""
+    """Блоки книги с отсортированным указателем и готовые строки его записей.
+
+    Модель здесь не вызывается. Термин, которого нет в `index.json` или у
+    которого с тех пор изменились глоссарий либо контекст, останавливает
+    сборку: устаревший указатель разошёлся бы с текстом книги.
+    """
     from . import pipeline as P
     requests = _requests(blocks)
     if not requests:
@@ -448,7 +514,9 @@ def assemble(work, blocks, meta, partial=False):
              if not terms.get(bid) or saved.get("src", {}).get(bid) != fresh_hashes[bid]]
     if stale and not partial:
         raise SystemExit(lang.T("index_missing", len(stale)))
-    terms = {bid: terms.get(bid, term) if bid not in stale else term for bid, term in requests.items()}
+    # Черновая сборка (partial) показывает такие термины в оригинале.
+    terms = {bid: term if bid in stale else terms.get(bid, term)
+             for bid, term in requests.items()}
     mode = meta.get("index_mode", "auto")
     bilingual = mode == "bilingual" or mode == "auto" and meta.get("bilingual")
     by_id = {b["id"]: b for b in blocks}
@@ -460,13 +528,21 @@ def assemble(work, blocks, meta, partial=False):
         bid = b["id"]
         term = terms[bid]
         tail = info.get("tail", "")
+        # Перекрёстная ссылка показывает термин той записи, на которую ведёт,
+        # в его переводе.
         for n, url in enumerate(b.get("links", []), 1):
             target = url[1:] if url.startswith("#") else ""
             if target in terms:
-                tail = re.sub(rf"(<a{n}>).*?(</a{n}>)", lambda m: m[1] + plain(terms[target]) + m[2], tail, flags=re.S)
-        tail = SEE.sub(lambda m: terms["_see_also"] if re.search(r"also|также|auch|aussi|también", m[0], re.I) else terms["_see"], tail)
-        if bilingual and not info.get("heading") and plain(term).casefold() != plain(info["term"]).casefold():
+                label = plain(terms[target])
+                tail = re.sub(rf"(<a{n}>).*?(</a{n}>)",
+                              lambda m: m[1] + label + m[2], tail, flags=re.S)
+        also = re.compile(r"also|также|auch|aussi|también", re.I)
+        tail = SEE.sub(lambda m: terms["_see_also" if also.search(m[0]) else "_see"], tail)
+        same = plain(term).casefold() == plain(info["term"]).casefold()
+        if bilingual and not info.get("heading") and not same:
             term += " (" + plain(info["term"]) + ")"
+        # Вложенность: fb2 и txt списков не знают, поэтому уровень передаётся
+        # отступом и тире в самой строке.
         depth, parent = 0, info.get("parent")
         while parent in by_id:
             depth += 1
@@ -480,6 +556,9 @@ def assemble(work, blocks, meta, partial=False):
             if not b["index"].get("heading"):
                 children[b["index"].get("parent", "")].append(b)
         out = [b for b in entries if b["index"].get("heading")]
+
+        # Буквенная рубрика ставится перед первой записью верхнего уровня на
+        # новую букву; подзаписи сортируются под своим родителем.
         def walk(parent):
             letter = None
             for b in sorted(children[parent], key=lambda b: sort_key(terms[b["id"]], to)):

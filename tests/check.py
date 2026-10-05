@@ -10,9 +10,9 @@
 записан, они просто берутся из этой же папки: заводя новую проверку, о ней
 нечего забыть, а забытая проверка — это проверка, которой нет.
 
-    python3 tests/check.py            сверить всё
-    python3 tests/check.py --books    только разбор книг
-    python3 tests/check.py --update   принять нынешние числа за верные
+    uv run python tests/check.py            сверить всё
+    uv run python tests/check.py --books    только разбор книг
+    uv run python tests/check.py --update   принять нынешние числа за верные
 """
 import concurrent.futures as cf
 import glob
@@ -71,7 +71,7 @@ def main():
     if not os.path.exists(mpath):
         if not update:
             print("описи нет. Соберите набор (build_corpus.py) и создайте её:\n"
-                  "  python3 tests/check.py --update\n"
+                  "  uv run python tests/check.py --update\n"
                   "Устройство описи — в manifest.json.example")
             return 1
         man = {"_": json.load(open(mpath + ".example", encoding="utf-8"))["_"],

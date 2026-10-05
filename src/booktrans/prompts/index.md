@@ -4,7 +4,7 @@ Use the book's glossary consistently. Terms must be dictionary headwords;
 subentries must make sense under the supplied parent term.
 Use the supplied source/translated passages to match terminology in the final
 book. A link may point to a page start: the term need not appear literally in
-the supplied passage. Do not invent a different link destination.
+the supplied passage.
 Preserve meaningful qualifiers, abbreviations, names and book titles. Preserve inline markup and
 numbered <aN> link markers if present. Do not add page numbers, references,
 explanations or the source term in parentheses. Do not sort the entries.

@@ -393,7 +393,7 @@ class Run:
         # другой вид книги.
         meta["bilingual"] = bool(getattr(a, "bilingual", False))
         meta["bilingual_style"] = getattr(a, "bilingual_style", None) or "light"
-        meta["index_mode"] = getattr(a, "index", "auto")
+        meta["index_mode"] = getattr(a, "book_index", "auto")
         indexing.mark(self.blocks, meta["index_mode"])
 
     def measure(self):
@@ -568,7 +568,7 @@ class Run:
         # выбросят его: на медицинской книге так ушёл в перевод 91 кусок.
         if self.meta.get("drop_sections"):
             extract._mark_back(self.blocks, drop_sections=self.meta["drop_sections"])
-        indexing.mark(self.blocks, getattr(a, "index", "auto"))
+        indexing.mark(self.blocks, getattr(a, "book_index", "auto"))
         self.meta.update(self.user_meta)
         if not self.meta.get("title_target"):
             log("  " + T("no_title", a.to))

@@ -174,7 +174,7 @@ def make_chunks(blocks, target=TARGET_WORDS):
     sections, cur = [], []
     for b in blocks:
         if b.get("index"):
-            continue                  # dedicated pass; do not renumber prose chunks
+            continue                  # свой проход; номера кусков прозы не сдвигаются
         if b["kind"] == "title" and any(x["kind"] == "p" for x in cur):
             sections.append(cur)
             cur = []

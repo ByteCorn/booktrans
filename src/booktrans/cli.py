@@ -201,7 +201,7 @@ def parser(ui):
     ap.add_argument("--like", action="append", help=T("h_like"))
     ap.add_argument("--name-series", action="store_true", help=T("h_name_series"))
     ap.add_argument("--bilingual", action="store_true", help=T("h_bilingual"))
-    ap.add_argument("--index", choices=("auto", "translated", "bilingual", "omit"),
+    ap.add_argument("--book-index", choices=("auto", "translated", "bilingual", "omit"),
                     default="auto", help=T("h_index"))
     ap.add_argument("--bilingual-style", choices=["light", "italic", "cite"], default="light",
                     help=T("h_bilingual_style"))

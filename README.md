@@ -5,7 +5,27 @@
 **Translate a whole book in one run.** Takes epub, fb2, html, pdf, md or txt;
 produces a finished book as epub, fb2, html, md, txt, LaTeX or pdf.
 
+## Why use BookTrans?
+
+An AI assistant can put together a translation script in minutes. A reliable
+book translation pipeline takes more: handling different layouts, keeping
+names and terms consistent across chapters, preserving links and footnotes,
+recovering from failures, and checking that nothing was lost.
+
+BookTrans is developed by a professional programmer. It represents months of
+development and testing on dozens of books, not just a prompt and a model
+call. Using that work saves you the time and tokens spent building, debugging
+and rerunning a hastily assembled pipeline of your own. Shared context,
+editing and verification support translation quality; resumable passes and
+rebuilding without model calls avoid repeating finished work.
+
+You still choose the models and translation rules. BookTrans handles the
+book-level workflow, whether you use Antigravity, Claude Code, Codex or an API.
+It does not replace a human translator or guarantee an error-free result.
+
 ## Translating a book
+
+After [installation](#installation):
 
 ```bash
 ./booktrans book.epub --to en
@@ -15,32 +35,28 @@ With no output name the book names itself after its author and title and comes
 out **as both fb2.zip and epub**. If you want one particular file, say so:
 `-o Book.fb2`.
 
-## Community & Support
-Join our Telegram group **[BookTrans Pipeline](https://t.me/BookTransPL)**! 
-In the group, you can request the translation of a specific book you need or get technical support.
+The pipeline detects markup, scouts the book, translates, edits, verifies and
+builds the output. Interrupt and rerun the same command to resume.
 
-That is all. Markup detection, reconnaissance, translation, footnotes,
-editing, assembly and checks — on its own. Interrupt whenever you like; it
-resumes where it stopped.
-
-**That runs on Claude Code**, which is the default. Other providers have
-ready-made wrappers, each one line away from `booktrans`:
+**Claude Code is the default agent.** Shell wrappers select ready-made profiles:
 
 | | |
 |---|---|
-| `./bt_claude` | Claude Code, the same thing said out loud |
-| `./bt_agy` | Gemini Pro & Flash through Antigravity |
-| `./bt_codex` | Codex |
+| `./bt_claude` | `--profile claude` |
+| `./bt_agy` | `--profile agy` (Antigravity) |
+| `./bt_codex` | `--profile codex` |
 
 `booktrans_ru` and `bt_*` are shell wrappers; they do not run directly in
 ordinary Windows CMD/PowerShell. Use `booktrans --to ru --ui ru` instead of
 `booktrans_ru`, and `booktrans --profile agy` (or another profile) instead of `bt_*`.
 
-The key `--agent claude|agy|codex` does the same, `--agent openrouter`
-reaches any model of [OpenRouter](https://openrouter.ai) by API key (see
-"OpenRouter"), and `--agent cmd --agent-cmd '…'` plugs in a CLI of your own.
-Which models each set uses is written in the wrapper itself and under
-"Per-pass models".
+`--agent claude|agy|codex` selects an agent's built-in model defaults, not a
+profile. API access and custom CLIs are also supported; see [Profiles](#profiles)
+and [Per-pass models](#per-pass-models).
+
+`booktrans_ru` uses Russian defaults for both the target and interface language;
+explicit keys override them: `./booktrans_ru book.epub --to de` translates into
+German with Russian messages.
 
 With translator's instructions:
 
@@ -56,114 +72,51 @@ contents in the target language only:
 ./booktrans book.epub --to ru --bilingual
 ```
 
-And here is the full arrangement — how one translates a long novel:
+For a long novel, with parallel editing and verification:
 
 ```bash
 ./booktrans moby-dick.epub -p instructions.md --to ru --agent agy --jobs 5
 ```
 
-What each part does:
+`-p` reads instructions from a file; `-pt "leave the names in Latin"` supplies
+them inline. `--jobs 5` parallelises editing, verification and footnotes, not
+translation: each translated chunk builds on the previous one.
 
-| | |
-|---|---|
-| `moby-dick.epub` | the book. No output name is given, so it names itself: "Мелвилл Герман. Моби Дик" — and comes out as both fb2 and epub |
-| `-p instructions.md` | your instructions to the translator: what to call the characters, which terms to fix, what to leave alone |
-| `-pt "leave the names in Latin"` | the same, but as a string — a typo in a filename must not silently become an instruction |
-| `--to ru` | target language |
-| `--agent agy` | what translates it: Antigravity. There are also `claude`, `codex`, `openrouter`, and `cmd` for a CLI of your own |
-| `--name-series` | include the cycle and book number in output file names: “Author. Cycle 02. Title” — a cycle's books line up in reading order; the number is zero-padded to two digits so plain alphabetical sorting keeps book 10 after book 9 |
-| `--like Book.work` | a book of the same cycle translated earlier: after reconnaissance its names are merged into the new reference — the spelling accepted there wins by force, so the cycle keeps one spelling, and the rejected spelling is also purged from the reference prose — character cards and voices — by the markup model, each edit checked to be local. One key per earlier book, in reading order (see below) |
-| `--jobs 5` | five threads for editing, verification and footnotes. Translation still runs sequentially: each chunk builds on the previous one |
-
-The third book of a cycle, with the first two already translated: a `--like`
-for each, in the order the books came out.
+For a series, use `--like` once per earlier working folder, in reading order.
+Previously accepted names override new choices, including in character cards
+and voice descriptions; those edits are checked to be local:
 
 ```bash
 ./booktrans book3.epub --to ru --agent agy --like book1.work --like book2.work
 ```
 
-**`--agent` names a set of defaults**, not just a program: each agent carries
-which model runs which pass and what backs it up. The line above is therefore
-complete — there is nothing to add to it. The wrappers `./bt_agy`,
-`./bt_claude` and `./bt_codex` do nothing beyond that key, they are merely
-shorter; your own takes two lines.
-
-Models sometimes **refuse silently**: they stop mid-sentence on certain
-passages and say nothing. The pipeline recognises this and hands the chunk to
-the next model of the set; which those are, see "Per-pass models".
-
-**`booktrans_ru`** is the same program with Russian defaults — Russian
-interface, Russian as the target language:
-
-```bash
-./booktrans_ru book.epub -o Книга.fb2
-```
-
-This is not a wrapper around machine translation. The pipeline first reads the
-whole book and builds a reference about it — who is who, how each narrator
-speaks, how big things are, what changes over the course of the story — and
-only then translates, leaning on that reference. It then removes the traces of
-translation, adds footnotes and assembles the file.
+`--name-series` adds the series and a zero-padded book number to output names:
+“Author. Series 02. Title”.
 
 ## What it does
 
-- **reads** epub, fb2, html, pdf, md, txt (a DRM-encrypted epub is refused with a clear message); **writes** epub, fb2, html, md, txt, tex, pdf;
-- **works out the markup with the model** rather than by fixed rules: every
-  publisher lays books out differently;
-- **scouts the book before translating** — narrator voices, names, terms,
-  gender and declension, physical properties of things, how characters change;
-- **translates in chunks**, never crossing a boundary between narrators, with
-  a cumulative plot digest and a shared list of accepted terms; the reference
-  is two-tier: the registry — one row per entity, with the original, the
-  translation, gender and a note — is merged by code without losses and has
-  no size cap — only the rows that occur in the chunk ride along, an address
-  pair "who; to whom" only when both are in the chunk (the address section is
-  the book's default in prose plus rows for the pairs that differ from it),
-  and on a book with a huge registry the rows are also held to a per-chunk
-  cap: names and terms first, then address pairs, the most-mentioned ahead;
-  words with several meanings from the danger list ride the same way, by
-  mention (references from
-  earlier releases are converted to this layout automatically, with a copy
-  kept beside) — while every request carries just a short frame (narrator,
-  prose style, danger spots), so a book of any size translates without
-  bloating the requests;
-- **proposes footnotes** and flags claims that contradict reality without
-  correcting the author: the text keeps the mistake, the footnote holds the
-  truth. The footnote sign lands on the explained word: the translator marks
-  the spot with a service pointer, editing must keep it in place (the
-  pipeline enforces this), and older translations fall back to a term
-  search;
-- **edits in a second pass**, deliberately without seeing the original;
-- **renders verse as verse**, quotes canonical texts from recognised
-  translations;
-- **converts units** to the system the target reader uses — except inside
-  quotations, names, clinical measures and trade sizes the target country
-  keeps in the author's unit (inch pipes, screen diagonals, calibres).
-  The rule is a prompt of its own, `prompts/units.md`, seen by every pass,
-  so the editor and the verifier judge by it too and do not "correct" a
-  converted figure back; your country's exceptions go into `units.add.md`;
-- **carries over** images, links, front and back matter, publication data;
-- **leaves code alone** in programming books, but translates the comments
-  inside it;
-- **rejects mangled replies** before they touch the disk: a stub instead
-  of a scene, one translation for two blocks, texts slid under the
-  neighbouring labels — the chunk is retried or handed down the chain;
-- **resumes** after any failure and **waits** for rate limits to recover;
-- **reports spending** by pass and model;
-- **works with any agent**, Claude Code by default;
-- **translates into any language** that has a rules file in `langs/`
-  (Russian, English, German, Spanish, French, Japanese, Chinese and Hindi ship with it);
-- **speaks any interface language** that has a file in `ui/`.
+- Detects publisher-specific markup and scouts narrator voices, names, terms,
+  gender and changes in the story before translating.
+- Translates in chunks with shared terminology and a rolling plot digest;
+  edits without the original, then verifies against it.
+- Adds explanatory footnotes without silently correcting the author. Footnote
+  positions are preserved through editing; older translations use term search.
+- Preserves verse, images, links, tables and publication data; translates code
+  comments, not the code itself. Linked EPUB indexes are translated and sorted.
+- Converts units for the target reader, except in quotations, names, clinical
+  measures and established trade sizes (pipes, screens, calibres). All passes
+  use `prompts/units.md`; local exceptions go in `units.add.md`.
+- Rejects truncated or misaligned replies, retries or switches models, resumes
+  interrupted work, waits out rate limits and reports spending.
+- Supports target-language rules in `langs/` and interface strings in `ui/`;
+  see [Languages](#languages). DRM-encrypted EPUBs are rejected.
 
-What it does **not** do: replace a human translator. Before your first run,
-read the "Security" and "Disclaimer" sections.
+Before your first run, read the "Security" and "Disclaimer" sections.
 
 ## Output formats
 
-The extension of `-o` decides. Without `-o` the book names itself after its
-author and title and comes out **as both fb2.zip and epub**: the language of a
-book says nothing about what it will be read on, and the second build costs no
-attention and not a single request to a model.
+The extension of `-o` selects the format. The default is both fb2.zip and epub;
+building another format from an existing translation makes no model requests.
 
 | | |
 |---|---|
@@ -266,15 +219,12 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"   # Windows
 curl -LsSf https://astral.sh/uv/install.sh | sh              # macOS, Linux
 ```
 
-`--check` names whatever is missing and prints the exact command to install it
-on your system — apt, dnf, pacman, zypper, emerge, apk, brew, scoop, choco or
-winget, whichever is actually there. It exits non-zero when something required
-is absent, so a script can ask it. Nothing is installed for you: a system
-package needs elevated rights, and a program that runs `sudo` on your machine
-unasked is not one you should trust.
+`--check` lists missing dependencies and installation commands for your system's
+package manager. It exits non-zero if a required dependency is absent and
+installs nothing automatically.
 
-**Required:** Python 3.9 or newer and the agent's CLI — that is what
-translates the book. **Optional, only for the formats you use:** `poppler`
+**Required:** Python 3.9 or newer and a configured model backend (agent CLI or
+API). **Optional, only for the formats you use:** `poppler`
 (`pdftotext`, `pdfimages`) to read pdf with the legacy method. Smart extraction with `bt_pdf2md` uses `pypdfium2` and `pillow` (installed automatically). epub, fb2
 and txt need nothing.
 
@@ -290,9 +240,8 @@ uv sync                # dependencies into .venv next to the script
 ./booktrans --check
 ```
 
-Plain `pip install` is worth avoiding: on current Linux distributions it
-refuses with "externally managed environment", and that message explains
-nothing to someone installing their first tool.
+Prefer `uv tool install` or `pipx` to system-wide `pip install`, which may fail
+with "externally managed environment" on Linux.
 
 ## Languages
 
@@ -327,7 +276,6 @@ A language file has two parts:
 2. **Strings for the reader** — lines of the form `str.key: value`. These end
    up inside the book itself: the "About this translation" section, the
    footnote prefix, the "Notes" and "Contents" headings, the date format.
-   A German book has no use for a Russian insert, which is why they live here.
 
 Whatever a new language leaves untranslated falls back to `ru`: the book comes
 out with a Russian insert, but it does not break.
@@ -335,35 +283,17 @@ out with a Russian insert, but it does not break.
 To add a language, copy the file under a new code and rewrite both parts.
 Nothing else needs changing; the system picks it up.
 
-**The shared prompts know no language.** Files in `prompts/` say "the target
-language", not "Russian": anything true of one language only lives in that
-language's file. A new language therefore needs no prompt edits.
+Shared prompts are language-independent; adding a language needs no prompt
+edits. For a replacement, put `translate.md` in `prompts/de/` (or another
+target-language folder). To extend rather than replace a prompt, use
+`name.add.md`; in `prompts/` itself it applies to every language. Additions
+retain upstream improvements after upgrades; full replacements do not.
 
-**Your own prompt goes in the folder named after the target language.**
-Translating into German with `prompts/de/translate.md` present, that file is
-used instead of the author's. Folders for several common languages are already
-there, empty; any other code works the same — create the folder, drop the file
-in.
-
-More often you want to add to a prompt rather than replace it: name the file
-`name.add.md` and it is appended to the author's instead of displacing it. The
-same file in `prompts/` itself applies to every language. An addition survives
-an upgrade of the pipeline; a full copy quietly falls behind it.
-
-The protocol tokens must be left alone — see below. The pipeline compares a
-replacement against the original and reports a missing token before the first
-request. More in `prompts/README.md`; to check the loading:
+**Do not translate protocol tokens:** `TERM:`, `TEXT:`, `SUMMARY:`, `TERMS:`,
+`<<<P>>>`, `<<<V>>>`, `<<<NOTE>>>`, `<<<META>>>`. Changing them breaks response
+parsing. Replacements are checked for missing tokens before the first request.
+See [the prompt guide](src/booktrans/prompts/README.md); check loading with
 `python3 tests/prompt_check.py`.
-
-**Translating the prompts themselves is unnecessary** — it buys no quality and
-can break things. `TERM:`, `TEXT:`, `SUMMARY:`, `TERMS:` and the markers
-`<<<P>>>`, `<<<V>>>`, `<<<NOTE>>>`, `<<<META>>>` are protocol tokens, not
-words: the response parser looks for exactly those. Translate them and the
-footnotes, the digest and the term list vanish without a sound.
-
-**Refusing pointless work.** If the book is already in the target language,
-the pipeline stops without spending a single request. Override with
-`--force-translate`.
 
 ## When the pipeline stops
 
@@ -386,10 +316,13 @@ in `work/structure.json`. If the book genuinely has no chapters, use
 | Pass | What it does | Why |
 |---|---|---|
 | **markup** | shows the model a census of the book's styles and asks which are headings, prose, or junk | every publisher lays out differently |
+| **scouting** | reads the whole book in large parts and records voices, names, terms, gender and forms of address | decisions are shared across chunks |
 | **headings** | translates all headings in one request | ten occurrences of one name must match exactly |
 | **translation** | chunks of ~2600 words, plus footnotes | the main work |
 | **editing** | second pass: calques, officialese, word order, seams | removes the traces of translation |
 | **verification** | the editor's remarks go to a verifier along with the original: a confirmed author's error becomes a footnote, a translation error gets fixed, an empty suspicion is dismissed | the editor works blind to the original, and its suspicions are settled by the one who sees both sides |
+| **footnotes** | adds explanations and flags factual discrepancies | the target reader may need additional context |
+| **index** | translates and sorts a retained EPUB index | terms follow the book's glossary; links are preserved |
 | **assembly** | book with footnotes, images, structure | |
 | **checks** | completeness, numbers, lengths, stray source text, footnote references, terminology | |
 
@@ -408,20 +341,20 @@ A rename in the reference thus reaches the text by itself: the affected
 chunks are re-verified, and the remainder shows in the "Names per the
 reference" check.
 
-Verification is full-text by default: the verifier receives every
-original–translation pair and, beyond the remarks, sweeps them for gross
-meaning errors — omissions, inverted sense, foreign numbers and measures,
-softening — and outright language errors: broken grammar, typos. Otherwise
-a smooth but wrong sentence is caught by nobody: the
-editor works blind to the original, and remarks do not cover everything.
-Only the input grows — the output stays short; an empty sweep is the norm.
-The `--no-full-verify` key restores the narrow mode: only the paragraphs
-named in editor remarks are verified.
+Verification is full-text by default: every original–translation pair is
+checked for omissions, inverted meaning, wrong numbers and measures, softened
+content, broken grammar and typos. This can catch fluent but wrong sentences
+the editor misses without the original. Output stays short; `--no-full-verify`
+limits verification to paragraphs named in editor remarks.
 
-The reconnaissance reference goes into the system prompt of **every** request,
-together with a rolling context: the plot digest, the tail of the already
-translated text, and the accumulated term list. The model thus builds up the
-same picture of the book that a reader does.
+The reference has two tiers: a short shared frame (narrator, style, risks)
+and an uncapped registry of entities with original forms, translations,
+gender and notes, merged by code. Requests include only relevant registry
+rows, prioritising names and terms within a size limit; address pairs need
+both participants present. Ambiguous words are selected by occurrence too.
+Older references are migrated automatically with a backup. Translation also
+receives the plot digest, the previous chunk's tail and accumulated terms;
+chunks respect narrator boundaries.
 
 ## Verse and quotations
 
@@ -484,22 +417,13 @@ change in chunking cannot leave a silent gap. When two chunk files claim the
 same block, the one written later wins — the fresher work, not the higher
 chunk number.
 
-Hit your subscription limits and the chunk goes to **the next model of the
-chain**, and the exhausted one is set aside until the provider says it will
-lift the ban. It is not asked again in the meantime: finding out costs a
-request, and on a book of two hundred chunks it would cost two hundred.
+At a subscription limit, the chunk goes to **the next model in the chain**.
+The exhausted model is skipped until the provider's reset time. When all are
+unavailable, the pipeline waits for the earliest recovery, including limits
+hit mid-request. The maximum wait defaults to a day; `--wait 0` disables it.
 
-Waiting only happens when every model of the chain is out, and then it waits
-for the one that recovers soonest, not for its own — by default up to a day.
-Disable with `--wait 0`.
-The whole chain is patient: when a limit strikes mid-request at the last free
-model, the chunk is not dropped but waits along with the rest.
-
-**A ban is recognised even without familiar wording.** Providers phrase it
-however they like, a list of phrases never keeps up, and an unrecognised ban
-used to stop the run instead of waiting it out. So a chunk that never got
-through ends with a two-word probe: if the model answers, the trouble was in
-the chunk; if it stays silent, the trouble is access — and that is waited out.
+If repeated failures have no recognisable limit message, a short probe
+distinguishes a chunk-specific problem from unavailable model access.
 
 ## Parallelism
 
@@ -550,11 +474,6 @@ no tools at all; that also drops about 12k tokens of agy's tool instructions
 from every request. Should a tool still be denied, the reply is recognised by
 `denied_actions` and retried at once, without counting as a refusal.
 
-**Opus takes on anything but is slow**: a hundred-chunk book takes some ten
-hours — translation is sequential by design, each chunk building on the
-previous one, and that cannot be sped up. You can interrupt at any point, and
-nothing already done is paid for twice.
-
 **Three refusals in a row stop the run.** One refusal is a contentious scene;
 three in a row mean it is no longer about the book — the model's policy
 changed, the quota ran out, the agent died. The whole run stops, not just the
@@ -598,8 +517,7 @@ get to look at what was refused before paying for it.
 
 ## Profiles
 
-Four roles, each with a chain of two or three models, do not fit on one line.
-A profile is a file holding the same keys you would have typed:
+A profile stores command-line keys, including model chains for different passes:
 
 ```
 # profiles/agy.conf — Gemini in front, Claude behind it
@@ -614,11 +532,9 @@ A profile is a file holding the same keys you would have typed:
 ./booktrans book.epub --profile agy --to ru --editor claude:claude-opus-5-5
 ```
 
-The second line shows the whole rule: **what you name by hand beats the
-profile, and the profile beats the agent's set.** Three levels, one rule — the
-keys of the profile are simply put at the front of the command line.
+**Explicit keys override the profile; the profile overrides agent defaults.**
 
-Fourteen ship with the package, in `profiles/`:
+Bundled profiles live in `profiles/`:
 
 | | |
 |---|---|
@@ -643,10 +559,8 @@ The paired ones (`agy-claude`, `claude-agy`) reach across providers: a
 separate quota, and refusals that fall in different places. Both halves have
 to be installed.
 
-**The two probes check the machinery of translation on cheap models**, which
-is what their files say in the first line. They exist to run a whole book
-through in minutes and see that the markup, footnotes, images and assembly
-are all there. A book translated by them is not worth reading.
+The `*-probe` profiles use cheap models to test markup, footnotes, images and
+assembly. They are smoke tests, not recommended for a translation you intend to read.
 
 `--profile` takes a name or a path — a name gets `.conf` appended
 and is looked for next to `BOOKTRANS_PROFILES`, then in the settings folder
@@ -670,10 +584,8 @@ would treat somebody else's script. To check without calling a model:
 ./booktrans book.epub --translator opus --editor sonnet --jobs 3
 ```
 
-Every pass has one key, and that key may hold several models — comma-separated,
-the second picking up what the first refuses. That is why there is no
-`--translator-fallback` and never will be: there are five passes, and a second
-key for each would double their number.
+Each pass accepts a comma-separated model chain: later models pick up failures
+of earlier ones.
 
 An agent other than `--agent` is named before the model with a colon
 (`claude:claude-opus-5`), and a third part sets the reasoning depth — `low`,
@@ -708,20 +620,17 @@ agent, so both spellings work — see "OpenRouter":
 | `--ocrmodel` | reading pdf pages from the image; `local:pdftotext` last in the chain falls back to the text layer |
 | `--model` | every pass at once, save those the agent's set gives to a cheap model |
 
-Name nothing and the agent's set applies (`PRESETS` in `models.py`): with agy the
-meaning-bearing passes run Gemini with Opus behind it and Claude Code's own
-Opus last — a different provider refuses in different places — while
-markup, OCR repair and page reading run a cheap Flash with Sonnet behind it;
-with claude, all three go to Sonnet; with openrouter, paid per token, Sonnet
-does the meaning-bearing passes with Gemini Flash behind it and Flash the
-cheap ones. What you name explicitly always beats the set.
+Without explicit models, the agent's built-in set applies (`PRESETS` in
+`src/booktrans/models.py`): agy uses Gemini with Opus fallbacks; OpenRouter
+uses Sonnet with Gemini Flash. Markup, OCR repair and page reading use cheaper
+models. Profiles can replace these choices; explicit per-pass keys win.
 
 **A chain covers a failure of any kind.** A refusal, a 502 from the provider,
 a connection that dropped — the chunk goes to the next model, and the error
 only ends the run when every model of the chain has failed it.
 
 Translation carries the literary quality and the responsibility for meaning;
-editing is more mechanical, and its every change is visible in `--diff` and
+editing is more mechanical, and its every change is recorded in `work/ed/` and
 reversible. That is where a cheaper model is worth trying first.
 
 ## Benchmark: how well does a model translate?
@@ -785,11 +694,8 @@ sentence in two. This harms translation directly: the break lands inside a
 chunk, the model takes it for part of the sentence, and coherence is lost.
 Hence the rule to remove them before translation rather than after.
 
-The built-in list covers the commonest specimens; you can inspect and extend
-it in `watermarks.txt`.
-
-Add your own to `watermarks.txt` next to the script — one pattern per line,
-Python regular expressions, case-insensitive:
+Extend the built-in list in `watermarks.txt` next to the script — one
+case-insensitive Python regular expression per line:
 
 ```
 mybooksite\.org
@@ -824,6 +730,23 @@ To check without calling a model: `python3 tests/html_check.py`.
 
 ## Links
 
+The author's outward links — site, social media, sources — are carried over as
+they are: the addresses live in the block, never pass through the model, and
+arrive byte for byte.
+
+**A link into the book stays inside the book.** A page is saved whole, and its
+cross-references are written as full addresses —
+`https://site/article.html#Intro` rather than `#Intro`. What makes a link
+internal is not the address but the anchor: if it exists in this same book, the
+link points inward, however it was written. Anchors are taken both from `id`
+and from the older `<a name>`.
+
+In the finished book such a link reaches its own section: in fb2 through
+`l:href="#…"`, in epub with the chapter's file name. An anchor the book does
+not contain is left alone — that link really is outward.
+
+To check without calling a model: `python3 tests/link_check.py`.
+
 **Out of a pdf the links are taken by a second reading.** `pdftotext` hands
 over bare text and the links vanish with it: an index stops being an index, a
 doi in a note becomes a string, and "Description 2" has nothing to click. The
@@ -843,9 +766,9 @@ is anchors the layout broke mid-word or set in italics.
 Recovering PDF links does not yet enable index translation; the index feature
 below currently applies only to EPUB input.
 
-### EPUB indexes
+### Book indexes (EPUB)
 
-`--index auto` (default) keeps an index if at least half its entries have
+`--book-index auto` (default) keeps an index if at least half its entries have
 working internal links. Structural parents without their own references do
 not count towards that fraction. Other indexes are omitted. Terms are
 translated using the book's glossary and nearby passages from the final
@@ -853,11 +776,20 @@ translation; nested entries, page labels and cross-references are preserved.
 Sorting is done by code, using Unicode collation; Russian treats «ё» as «е»
 and puts untranslated Latin entries after Cyrillic ones.
 
-A normal book has a translated index. With `--bilingual`, entries read
-«Анемия (anaemia)», still sorted by the translated term. Override separately
-with `--index translated`, `--index bilingual` or `--index omit`. Explicit
-translation modes bypass the half-linked threshold, but still require at
-least one working internal link.
+Bilingual entries are also sorted by the translated term. The explicit
+`translated` and `bilingual` modes bypass the half-linked threshold, but still
+require at least one working internal link:
+
+| `--book-index` mode | Normal book | With `--bilingual` |
+|---|---|---|
+| `auto` (default) | Анемия | Анемия (anaemia) |
+| `translated` | Анемия | Анемия |
+| `bilingual` | Анемия (anaemia) | Анемия (anaemia) |
+| `omit` | no index | no index |
+
+For example, `--to ru --book-index bilingual` keeps original terms in parentheses
+without making the body bilingual. Omission also removes links to the discarded
+index, retaining their visible text.
 
 The `index` pass runs after verification, before assembly. On an existing
 working folder, the source EPUB supplies missing index entries without
@@ -865,30 +797,12 @@ renumbering the prose or retranslating the book:
 
 ```bash
 ./booktrans book.epub -w Book.work --to ru --only index
-./booktrans book.epub -w Book.work --to ru --only build --index bilingual
+./booktrans book.epub -w Book.work --to ru --only build --book-index bilingual
 ```
 
 Terms are saved in `ru/index.json` (or the target language's folder). Build
 does not call a model: if terms or their glossary/context have changed, rerun
 `--only index`. The EPUB must be the same source used for the working folder.
-
-
-The author's outward links — site, social media, sources — are carried over as
-they are: the addresses live in the block, never pass through the model, and
-arrive byte for byte.
-
-**A link into the book stays inside the book.** A page is saved whole, and its
-cross-references are written as full addresses —
-`https://site/article.html#Intro` rather than `#Intro`. What makes a link
-internal is not the address but the anchor: if it exists in this same book, the
-link points inward, however it was written. Anchors are taken both from `id`
-and from the older `<a name>`.
-
-In the finished book such a link reaches its own section: in fb2 through
-`l:href="#…"`, in epub with the chapter's file name. An anchor the book does
-not contain is left alone — that link really is outward.
-
-To check without calling a model: `python3 tests/link_check.py`.
 
 ## Tables
 
@@ -959,19 +873,19 @@ without calling a model: `python3 tests/tex_check.py`.
 
 ## Other input formats
 
-The pipeline reads epub, fb2, html, pdf and txt. Anything else — docx, rtf,
-mobi, azw3, chm — is easier turned into epub with an outside converter first
-and then translated as usual:
+The pipeline reads epub, fb2, html, pdf, md and txt. Markdown headings, code
+fences, tables and emphasis are parsed directly, without model-based markup
+detection. A `.md` file with no headings is read as plain text.
+
+Convert other formats — docx, rtf, mobi, azw3, chm — to epub first:
 
 ```bash
 ebook-convert book.mobi book.epub     # Calibre
 pandoc book.docx -o book.epub         # pandoc
 ```
 
-The pipeline deliberately grows no converter of its own: its reading and
-assembly give what a converter cannot — blocks with stable ids that survive
-translation. Turning mobi into epub, on the other hand, is somebody else's work
-and long since done.
+BookTrans handles translation and stable block IDs; existing converters handle
+format conversion.
 
 ## Encodings
 
@@ -1011,6 +925,8 @@ Hebrew and Arabic tables, plus East Asian `shift_jis`, `euc_jp`, `gb18030`,
 
 ```
 --profile NAME        a file of keys: a name from profiles/ or a path
+--like DIR            reuse accepted names from an earlier book's work folder; repeat in reading order
+--name-series         include the series and book number in output names
 -p, --prompt FILE     translator's instructions
 -pt, --prompt-text S  the same as a string; may be combined with -p
 -o, --out FILE        output file; format follows the extension
@@ -1021,7 +937,7 @@ Hebrew and Arabic tables, plus East Asian `shift_jis`, `euc_jp`, `gb18030`,
 --ui CODE             interface language (ui/CODE.json), en by default
 --encoding NAME       input encoding, when detection got it wrong
 --only STEP           a single step: ocr|structure|ocrfix|scout|translate|edit|verify|index|build|qa|notes
---index MODE          EPUB index: auto|translated|bilingual|omit (default: auto)
+--book-index MODE     EPUB index: auto|translated|bilingual|omit (default: auto)
 --skip a,b            skip steps
 --chunks 5,6,7        only these chunks; a range works too: 41-93
 --pages 5,6,10        only these pages (for PDF visual extraction)
@@ -1048,7 +964,7 @@ Hebrew and Arabic tables, plus East Asian `shift_jis`, `euc_jp`, `gb18030`,
 --force-translate     translate even if the book is already in the target language
 --no-headings         the book really has no chapters, do not stop
 --chunk-words N       chunk size
---retries N           attempts per chunk on a parsing failure (default 3)
+--retries N           attempts per chunk on a parsing failure (default 5)
 --max-wait SEC        cap on waiting for rate limits (default one day)
 --partial             assemble even with parts untranslated
 --check               check the environment and say what is missing
@@ -1189,16 +1105,6 @@ because paragraph breaks — an indent or a blank line — are worked out over t
 whole text at once. To check without calling a model:
 `python3 tests/columns_check.py`.
 
-**A book set in columns is read differently.** `pdftotext -layout` keeps the
-physical placement, and the stripping of running heads leans on it — but on a
-two- or three-column page it glues fragments of neighbouring columns into one
-line, and no paragraph survives. So pages are examined first, and a book that
-turns out to be set in columns is read in plain reading order instead: one
-column through, then the next. The decision is taken over the whole book,
-because paragraph breaks — an indent or a blank line — are worked out over the
-whole text at once. To check without calling a model:
-`python3 tests/columns_check.py`.
-
 A pdf with no text layer is refused outright, with a hint to run OCR
 (`ocrmypdf in.pdf out.pdf`) — silently translating an empty book is worse.
 
@@ -1312,14 +1218,10 @@ are high: a miss leaves a whole chapter untranslated. How exactly is in the
 comments on `_refs_span` and `_mark_cites`. To check the picking without
 calling a model: `python3 tests/refs_check.py`.
 
-**The back matter — index, notes, list of sources — is recognised as a whole
-section.** Three signs are required at once: the section sits at the end of the
-book, it is made of entries rather than prose, and it is either named for what
-it is ("Notes", "Index", "Bibliography") or continues a run already recognised
-— which is how note subsections titled like chapters get picked up. Measured on
-a live book: chapters run 0-87% of pieces containing a digit at 519-914
-characters a paragraph, notes and index 97-100% at 92-320. No model is needed
-here: the numbers are too far apart.
+Back matter — indexes, notes, bibliographies — is detected section-wide using
+three signs together: position near the end, entry-like rather than prose
+content, and a matching heading or continuation of an already recognised run.
+This also catches note subsections titled like chapters.
 
 Retained EPUB indexes use the dedicated `index` pass described under "Links";
 other back matter retains the existing treatment. The section heading is
@@ -1336,21 +1238,21 @@ the tail of the publication data.
 ## Layout
 
 ```
-booktrans              entry point (English defaults)
-booktrans_ru           the same, with Russian defaults
-lib/agent.py           agent, rate-limit waiting
-lib/extract.py         epub/fb2/pdf/txt -> blocks
-lib/pipeline.py        chunking, scouting, translation, editing, footnotes
-lib/build.py           assembly, checks
-lib/output.py          epub, html, txt, tex, pdf writers (fb2 lives in build.py)
-lib/lang.py            target language, interface, language detection
-lib/tune.py            every tunable number of the pipeline
-prompts/*.md           the task for each pass
-langs/*.md             target language rules
-agents/booktrans/      the tool-less agy agent, copied to ~/.gemini/config/agents/
-ui/*.json              interface messages
-watermarks.txt         extra watermark patterns
-README.ru.md           this file in Russian
+booktrans                       entry point (English defaults)
+booktrans_ru                    shell wrapper with Russian defaults
+src/booktrans/agent.py           agents, rate-limit waiting
+src/booktrans/extract.py         input files -> blocks
+src/booktrans/pipeline.py        scouting, translation, editing, footnotes
+src/booktrans/indexing.py        linked EPUB indexes
+src/booktrans/build.py           assembly, checks, fb2 output
+src/booktrans/output.py          other output formats
+src/booktrans/lang.py            languages and detection
+src/booktrans/tune.py            pipeline thresholds
+src/booktrans/prompts/           tasks for each pass
+src/booktrans/langs/             target language rules
+src/booktrans/agents/booktrans/  tool-less agy agent
+src/booktrans/ui/                interface messages
+watermarks.txt                  extra watermark patterns
 ```
 
 The governing principle: **anything that can be done deterministically is not
@@ -1451,6 +1353,11 @@ short quotation rather than a chunk of the book, with `WebSearch` alone — neve
 `WebFetch`, which opens arbitrary addresses and is a ready-made exfiltration
 channel.
 
+## Community & Support
+
+Ask for technical support or a book translation in the Telegram group
+[BookTrans Pipeline](https://t.me/BookTransPL).
+
 ## Licence
 
 MIT — take it, change it, build it into anything, paid products included.
@@ -1481,9 +1388,6 @@ accepts no liability for the consequences of its use, including:
 
 ## Limits of the method
 
-This is machine translation with good rigging, not the work of a living
-translator. The pipeline gives you completeness, consistent terminology,
-preserved structure and the absence of gross blunders. It does not give you
-literary quality in long dialogue, wordplay or an author's rhythm.
-
-The sensible stance: a good draft, fit to read.
+Treat the output as a draft to review. BookTrans checks completeness,
+terminology and structure, but errors can remain. Long dialogue, wordplay and
+an author's rhythm still need a human translator's judgement.

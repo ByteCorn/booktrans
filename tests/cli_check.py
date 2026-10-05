@@ -53,6 +53,23 @@ def main():
     ok("notes — только через --only", "notes" not in cli.STEPS
        and cli.steps_of(args("--only", "notes")) == ["notes"])
 
+    # ---- книжный указатель: публичный ключ, режимы и отсутствие старого имени
+    ok("указатель по умолчанию — auto", args().book_index == "auto")
+    for mode in ("auto", "translated", "bilingual", "omit"):
+        got = args("--book-index", mode)
+        ok("--book-index " + mode, got.book_index == mode, got.book_index)
+    got = args("--bilingual", "--book-index", "translated")
+    ok("вид указателя не зависит от двуязычия книги",
+       got.bilingual and got.book_index == "translated")
+    for option, value in (("--index", "omit"), ("--book-index", "unknown")):
+        with contextlib.redirect_stderr(io.StringIO()):
+            try:
+                args(option, value)
+            except SystemExit as exc:
+                ok(option + " " + value + " отклоняется", exc.code == 2)
+            else:
+                ok(option + " " + value + " отклоняется", False)
+
     # ---- номера кусков
     got = chunk_numbers("5, 6,41-43")
     ok("номера и диапазоны", got == {5, 6, 41, 42, 43}, got)

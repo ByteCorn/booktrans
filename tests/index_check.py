@@ -14,6 +14,7 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 import zipfile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -98,6 +99,53 @@ class IndexChecks(unittest.TestCase):
 
     def test_index_does_not_change_prose_chunk_numbers(self):
         self.assertEqual(P.make_chunks(self.blocks), P.make_chunks(self.body))
+
+    def test_book_index_cli_mode_reaches_pipeline(self):
+        from booktrans import cli
+        from booktrans.run import Run
+        for bilingual in (False, True):
+            for mode in ("auto", "translated", "bilingual", "omit"):
+                with self.subTest(mode=mode, bilingual=bilingual):
+                    argv = [self.source, "--to", "ru", "--book-index", mode]
+                    if bilingual:
+                        argv.append("--bilingual")
+                    args = cli.parser("en").parse_args(argv)
+                    run = Run(args, self.work, lambda *a, **k: None,
+                              SimpleNamespace(first=lambda *a: None), [])
+                    run.meta = copy.deepcopy(self.meta)
+                    run.blocks = copy.deepcopy(self.blocks)
+                    run.merge_meta()
+                    self.assertEqual(run.meta["index_mode"], mode)
+                    self.assertEqual(run.meta["bilingual"], bilingual)
+                    entries = [b for b in run.blocks if b.get("index")]
+                    self.assertTrue(entries)
+                    self.assertTrue(all(bool(b.get("drop")) == (mode == "omit")
+                                        for b in entries))
+
+    def test_book_index_mode_survives_scout(self):
+        # Разведка помечает указатели заново: режим из ключа должен дойти и сюда.
+        from booktrans import cli, run as R
+        quiet = lambda *a, **k: None
+        models = SimpleNamespace(first=lambda *a: None, rest=lambda *a: [])
+        for mode in ("auto", "translated", "bilingual", "omit"):
+            with self.subTest(mode=mode):
+                args = cli.parser("en").parse_args(
+                    [self.source, "--to", "ru", "--book-index", mode])
+                run = R.Run(args, self.work, quiet, models, [])
+                run.meta = copy.deepcopy(self.meta)
+                run.blocks = copy.deepcopy(self.blocks)
+                run.merge_meta()
+                with patch.object(R.pipeline, "scout", lambda *a, **k: ""), \
+                        patch.object(R.pipeline, "cycle_merge", quiet), \
+                        patch.object(R.pipeline, "scout_meta", lambda *a, **k: {}), \
+                        patch.object(R.Run, "sysprompt", lambda *a, **k: ""), \
+                        patch.object(R.Run, "task", lambda *a, **k: ""), \
+                        patch.object(R.Run, "_head", quiet):
+                    run.step_scout()
+                entries = [b for b in run.blocks if b.get("index")]
+                self.assertTrue(entries)
+                self.assertTrue(all(bool(b.get("drop")) == (mode == "omit")
+                                    for b in entries))
 
     def test_old_letter_links_and_omitted_index(self):
         self.translate()

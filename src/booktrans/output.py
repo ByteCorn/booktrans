@@ -185,7 +185,7 @@ def _inline(s, table, links=None):
     if links:
         for i, url in enumerate(links, 1):
             if not url:
-                continue                   # omitted index target: keep the label only
+                continue                   # цель в выброшенном указателе: остаётся текст
             href = escape(url, {'"': "&quot;"})
             tag = "a l:href" if table is FB2_INLINE else "a href"
             s = s.replace(f"&lt;a{i}&gt;", f'<{tag}="{href}">')

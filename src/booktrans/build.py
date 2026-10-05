@@ -497,7 +497,8 @@ def build_book(work, meta, blocks, cover, dest, log, partial=False, images=None)
         if b.get("asis"):
             tr.setdefault(b["id"], listings.get(b["id"], b["text"]))
     missing = [b["id"] for b in blocks
-               if not b.get("drop") and b["kind"] not in ("break", "image") and b["id"] not in tr]
+               if not b.get("drop") and b["kind"] not in ("break", "image")
+               and b["id"] not in tr]
     if missing and not partial:
         raise SystemExit(f"не переведено {len(missing)} блоков, например {missing[:6]}")
     src = {b["id"]: b["text"] for b in blocks}
@@ -624,7 +625,8 @@ def build_book(work, meta, blocks, cover, dest, log, partial=False, images=None)
                 else:
                     # Заголовок остаётся один, с переводом: по нему оглавление;
                     # оригинал писатель ставит второй строкой того же элемента.
-                    if k in ("title", "subtitle") and bid not in index_tr and bid in src and src[bid].strip() and src[bid] != t:
+                    if (k in ("title", "subtitle") and bid not in index_tr
+                            and bid in src and src[bid].strip() and src[bid] != t):
                         bi_titles[bid] = src[bid]
                     two.append(it)
             items = two

@@ -668,6 +668,8 @@ def _doc_blocks(root, styles, get_image, stats, index_roles=None):
     # Потомков сноски обходить не надо: сама сноска уже взята целиком,
     # иначе её текст выйдет дважды — и в сносках, и абзацем в главе.
     inside_note = set()
+    # Запись указателя берётся целиком, как и сноска. Её потомки отдельно не
+    # обходятся — кроме вложенных записей, у которых своя роль.
     index_roles = index_roles or {}
     inside_index = set()
     for node in root.iter():
@@ -690,12 +692,16 @@ def _doc_blocks(root, styles, get_image, stats, index_roles=None):
         if id(el) in index_roles:
             from . import indexing
             role = dict(index_roles[id(el)])
-            if role["section"].startswith("semantic_") and not any(x[-1].get("section") == role["section"] for x in got if isinstance(x[-1], dict)):
+            # Раздел размечен как указатель, а заголовка в нём нет: первой
+            # записи предшествует условный заголовок, его переведёт проход.
+            opened = any(x[-1].get("section") == role["section"]
+                         for x in got if isinstance(x[-1], dict))
+            if role["section"].startswith("semantic_") and not opened:
                 got.append(("title", "Index", [], "", None,
                             {"key": role["section"], "section": role["section"], "heading": True}))
             own = indexing.own_element(el)
-            # Descendants will not be visited separately; retain pagebreak
-            # IDs on spans as well as the entry's own anchor.
+            # Потомков обход пропустит, поэтому их якоря — метки страниц на
+            # span — запись забирает вместе со своим.
             for child in own.iter():
                 for a in _anchors_of(child):
                     anchors[a] = len(got)
@@ -3095,7 +3101,8 @@ def _asis_runs(blocks):
     Код и выброшенные разделы не в счёт — там решение не спорное."""
     runs, start = [], None
     for i, b in enumerate(blocks):
-        hit = bool(b.get("asis")) and not b.get("drop") and not b.get("index") and b["kind"] in ("p", "note")
+        hit = (bool(b.get("asis")) and not b.get("drop") and not b.get("index")
+               and b["kind"] in ("p", "note"))
         if hit and start is None:
             start = i
         if not hit and start is not None:

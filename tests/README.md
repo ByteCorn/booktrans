@@ -23,7 +23,7 @@ comparisons mean anything.
 **Free, after any change to extraction:**
 
 ```bash
-python3 tests/check.py
+uv run python tests/check.py
 ```
 
 Reads every book and compares it against `manifest.json`: language, paragraph
@@ -33,13 +33,13 @@ written nowhere; they are simply picked up from this folder, so a new check
 needs no registering, and a check nobody remembers to run is a check that does
 not exist. No model requests at all; the whole thing finishes in seconds.
 
-To check the books alone, without the rules: `python3 tests/check.py --books`. A mismatch means one of two things —
+To check the books alone, without the rules: `uv run python tests/check.py --books`. A mismatch means one of two things —
 either extraction has broken, or extraction has improved. Only a human can
 tell which, so the manifest is never updated on its own. Once you have
 satisfied yourself that things got better:
 
 ```bash
-python3 tests/check.py --update
+uv run python tests/check.py --update
 ```
 
 **A full run, which does cost money:**
@@ -57,7 +57,7 @@ name copyrighted books. Build the corpus with `build_corpus.py`, then create
 the inventory with
 
 ```bash
-python3 tests/check.py --update
+uv run python tests/check.py --update
 ```
 
 It writes down what was read today, and from then on guards against
