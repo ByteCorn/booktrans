@@ -677,9 +677,9 @@ class AgyAgent(Agent):
             try:
                 r = subprocess.run(["agy", "--sandbox", "--output-format", "json"], input="hi", capture_output=True, text=True, timeout=15)
                 env = json.loads(r.stdout)
-                Agent._default_cache["agy"] = env.get("model", "gemini-3.1-pro-high")
+                Agent._default_cache["agy"] = env.get("model", "gemini-3.8-flash-medium")
             except Exception:
-                Agent._default_cache["agy"] = "gemini-3.1-pro-high"
+                Agent._default_cache["agy"] = "gemini-3.8-flash-medium"
         return Agent._default_cache["agy"]
 
     def __init__(self, model=None, timeout=1800, effort=None):

@@ -48,10 +48,10 @@ CHEAP_EFFORT = {"claude": "low", "openrouter": "low", "openai": "low"}
 # без обёрток и без десятка ключей в командной строке.
 PRESETS = {
     "agy": {
-        "model": "gemini-3.1-pro-high,claude-opus-4-6-thinking,claude-opus-5",
-        "formatter": "gemini-3.6-flash-low,claude-sonnet-4-6",
-        "ocrfixer": "gemini-3.6-flash-low,claude-sonnet-4-6",
-        "ocrmodel": "gemini-3.8-flash-low,claude-sonnet-4-6",
+        "model": "gemini-3.8-flash-medium,claude-opus-5-5-medium,claude-sonnet-5-5-medium",
+        "formatter": "gemini-3.8-flash-low,claude-sonnet-5-5-low",
+        "ocrfixer": "gemini-3.8-flash-low,claude-sonnet-5-5-low",
+        "ocrmodel": "gemini-3.8-flash-low,claude-sonnet-5-5-low",
     },
     "claude": {
         "formatter": "claude-sonnet-5",
@@ -80,12 +80,12 @@ def parse_chain(s, agent=None):
     второй ключ — это `--translator-fallback`, `--editor-fallback` и так далее
     без конца:
 
-        --editor gemini-3.1-pro-high,claude-opus-4-6-thinking
+        --editor gemini-3.8-flash-high,claude-opus-5-5-medium
 
     Через двоеточие перед моделью называется агент, если запасная модель не у
     того поставщика, что основная. Без двоеточия берётся агент из `--agent`:
 
-        --editor gemini-3.1-pro-high,claude:claude-opus-5
+        --editor gemini-3.8-flash-high,claude:claude-opus-5-5
 
     Третьей частью через двоеточие можно указать глубину размышлений
     (low/medium/high, а где агент умеет — xhigh и max):

@@ -86,15 +86,15 @@ def main():
     got = models("--agent", "agy", "--model", "X").chain("ocrmodel")
     ok("у agy страницы читает Flash, не --model",
        got == [("agy", "gemini-3.8-flash-low", None),
-               ("agy", "claude-sonnet-4-6", None)], got)
+               ("agy", "claude-sonnet-5-5-low", None)], got)
     got = models("--formatter", "Y", "--effort", "high").chain("formatter")
     ok("названная явно модель разметки — с общим усилием",
        got == [("claude", "Y", "high")], got)
     got = models("--agent", "agy").chain("editor")
     ok("набор agy: три модели цепочкой",
-       got == [("agy", "gemini-3.1-pro-high", None),
-               ("agy", "claude-opus-4-6-thinking", None),
-               ("agy", "claude-opus-5", None)], got)
+       got == [("agy", "gemini-3.8-flash-medium", None),
+               ("agy", "claude-opus-5-5-medium", None),
+               ("agy", "claude-sonnet-5-5-medium", None)], got)
     got = models("--agent", "agy", "--editor", "a,claude:b").chain("editor")
     ok("ключ роли сильнее набора, чужой агент в цепочке",
        got == [("agy", "a", None), ("claude", "b", None)], got)

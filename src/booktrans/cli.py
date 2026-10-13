@@ -98,7 +98,7 @@ def read_profile(name, roots=None):
 
         # умный набор для antigravity
         --agent agy
-        --translator gemini-3.1-pro-high,claude:claude-opus-5
+        --translator gemini-3.8-flash-medium,claude:claude-opus-5-5
 
     Имя ищется по папкам, путь берётся как есть.
     """

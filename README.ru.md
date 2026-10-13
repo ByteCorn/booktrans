@@ -524,7 +524,7 @@ Thoat — тоат, восьминогое ездовое животное; не
 # profiles/agy.conf — Gemini впереди, Claude на подстраховке
 --agent agy
 --translator gemini-3.8-flash-medium,claude:claude-opus-5-5
---editor     claude:claude-opus-5-5,gemini-3.1-pro-high
+--editor     claude:claude-opus-5-5,gemini-3.8-flash-high
 --jobs 5
 ```
 
@@ -596,14 +596,14 @@ Thoat — тоат, восьминогое ездовое животное; не
 
 ```bash
 ./booktrans книга.epub --agent agy \
-    --translator claude-opus-4-6-thinking,gemini-3.1-pro-high
+    --translator claude-opus-5-5-medium,gemini-3.8-flash-high
 ```
 
 Запасная модель бывает и у другого поставщика — тогда перед ней через
 двоеточие пишется агент:
 
 ```bash
-./booktrans книга.epub --agent agy --editor gemini-3.1-pro-high,claude:claude-opus-5-5
+./booktrans книга.epub --agent agy --editor gemini-3.8-flash-high,claude:claude-opus-5-5
 ```
 
 Третьей частью через двоеточие задаётся глубина размышлений — `low`,
@@ -623,7 +623,7 @@ Thoat — тоат, восьминогое ездовое животное; не
 черта, поэтому годятся оба написания — см. «OpenRouter»:
 
 ```bash
-./booktrans книга.epub --agent agy --editor gemini-3.1-pro-high,openrouter:deepseek/deepseek-v4-pro:high
+./booktrans книга.epub --agent agy --editor claude-opus-5-5-medium,openrouter:deepseek/deepseek-v4-pro:high
 ./booktrans книга.epub --agent openrouter --editor deepseek/deepseek-v4-pro:high,anthropic/claude-sonnet-5
 ```
 
@@ -994,7 +994,7 @@ macOS — `~/Library/Application Support/booktrans`): одной строкой,
 
 ```bash
 ./booktrans книга.epub --agent agy \
-    --editor gemini-3.1-pro-high,openrouter:deepseek/deepseek-v4-pro:high
+    --editor claude-opus-5-5-medium,openrouter:deepseek/deepseek-v4-pro:high
 ./booktrans книга.epub --agent openrouter \
     --translator anthropic/claude-sonnet-5:max,google/gemini-3.8-flash
 ```

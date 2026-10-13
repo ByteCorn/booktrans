@@ -523,7 +523,7 @@ A profile stores command-line keys, including model chains for different passes:
 # profiles/agy.conf — Gemini in front, Claude behind it
 --agent agy
 --translator gemini-3.8-flash-medium,claude:claude-opus-5-5
---editor     claude:claude-opus-5-5,gemini-3.1-pro-high
+--editor     claude:claude-opus-5-5,gemini-3.8-flash-high
 --jobs 5
 ```
 
@@ -605,7 +605,7 @@ OpenRouter's model names carry a slash and a colon of their own
 agent, so both spellings work — see "OpenRouter":
 
 ```bash
-./booktrans book.epub --agent agy --editor gemini-3.1-pro-high,openrouter:deepseek/deepseek-v4-pro:high
+./booktrans book.epub --agent agy --editor claude-opus-5-5-medium,openrouter:deepseek/deepseek-v4-pro:high
 ./booktrans book.epub --agent openrouter --editor deepseek/deepseek-v4-pro:high,anthropic/claude-sonnet-5
 ```
 
@@ -996,7 +996,7 @@ from the agent:
 
 ```bash
 ./booktrans book.epub --agent agy \
-    --editor gemini-3.1-pro-high,openrouter:deepseek/deepseek-v4-pro:high
+    --editor claude-opus-5-5-medium,openrouter:deepseek/deepseek-v4-pro:high
 ./booktrans book.epub --agent openrouter \
     --translator anthropic/claude-sonnet-5:max,google/gemini-3.8-flash
 ```
